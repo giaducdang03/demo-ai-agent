@@ -1,111 +1,142 @@
-<div align="center">
+## RAG Demo using Couchbase, Streamlit, LlamaIndex, and OpenAI
 
-# 🚀 FastAPI Modular Application
+This is a demo app built to chat with your custom PDFs using the vector search capabilities of Couchbase to augment the OpenAI results in a Retrieval-Augmented-Generation (RAG) model.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Docker](https://img.shields.io/badge/Docker-20.10+-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
-[![GitHub](https://img.shields.io/badge/GitHub-Modular_FastAPI-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com)
+> Note that you need Couchbase Server 7.6 or higher for Vector Search.
 
-A scalable FastAPI project template with modular architecture and API versioning.
+### How does it work?
 
-</div>
+You can upload your PDFs with custom data & ask questions about the data in the chat box.
 
-## 🛠️ Tech Stack
+For each question, you will get two answers:
 
-<details open>
-<summary>Core Technologies</summary>
-<br>
+- one using RAG (Couchbase logo)
+- one using pure LLM - OpenAI (🤖).
 
-<div align="center">
+For RAG, we are using LlamaIndex, Couchbase Vector Search & OpenAI. We fetch parts of the PDF relevant to the question using Vector search & add it as the context to the LLM. The LLM is instructed to answer based on the context from the Vector Store.
 
-| Category | Technologies |
-|----------|-------------|
-| 🐍 Core | Python 3.8+, FastAPI, Uvicorn ASGI |
-| 📦 Structure | Modular Architecture, API Versioning |
-| 🛠️ Development | Docker & Compose, Hot Reload, Swagger UI |
+### How to Run
 
-</div>
+- Install dependencies
 
-</details>
+  `pip install -r requirements.txt`
 
-## ✨ Features
+- Set the environment secrets
 
+  Copy the `secrets.example.toml` file in `.streamlit` folder and rename it to `secrets.toml` and replace the placeholders with the actual values for your environment
 
-<table>
-<tr>
-    <td align="center">📦 <b>API Versioning</b><br>Clean and maintainable version control</td>
-    <td align="center">🔄 <b>Async Support</b><br>Built for high performance</td>
-    <td align="center">🎯 <b>Modular Design</b><br>Scalable architecture</td>
-</tr>
-</table>
+  ```OPENAI_API_KEY = "<open_ai_api_key>"
+  DB_CONN_STR = "<connection_string_for_couchbase_cluster>"
+  DB_USERNAME = "<username_for_couchbase_cluster>"
+  DB_PASSWORD = "<password_for_couchbase_cluster>"
+  DB_BUCKET = "<name_of_bucket_to_store_documents>"
+  DB_SCOPE = "<name_of_scope_to_store_documents>"
+  DB_COLLECTION = "<name_of_collection_to_store_documents>"
+  INDEX_NAME = "<name_of_fts_index_with_vector_support>"
+  AUTH_ENABLED = "True/False" # enables authentication for the streamlit app using LOGIN_PASSWORD
+  LOGIN_PASSWORD = "<password to access the streamlit app>"
+  # Required for streamlit cloud as downloads are restricted to default locations
+  NLTK_DATA = "/tmp/nltk-corpora"
+  TIKTOKEN_CACHE_DIR = "/tmp/tiktoken-cache"
+  ```
 
+  The last two parameters are required only if you are deploying on the streamlit cloud.
 
-## 🏗️ Project Structure
-```
-├───backend
-│   └───app
-│       ├───api
-│       │   ├───api_v1
-│       │   └───api_v2
-│       ├───core
-│       │   └───__pycache__
-│       ├───db
-│       │   ├───models
-│       │   └───__pycache__
-│       ├───repositories
-│       ├───schemas
-│       ├───services
-│       │   ├───services
-│       │   └───utils
-│       └───unit_of_work
-└───frontend
-```
+- #### Create the Search Index on Full Text Service
 
-## 🚀 Quick Start
+  We need to create the Search Index on the Full Text Service in Couchbase. For this demo, you can import the following index using the instructions.
 
-1. **Clone and Install**
-   ```bash
-   git clone <repository-url>
-   pip install -r requirements.txt
-   ```
+  - [Couchbase Capella](https://docs.couchbase.com/cloud/search/import-search-index.html)
 
-2. **Run Development Server**
-   ```bash
-   docker compose up --build -d
-   ```
+    - Copy the index definition to a new file index.json
+    - Import the file in Capella using the instructions in the documentation.
+    - Click on Create Index to create the index.
 
-3. **View API Documentation**
-   ```
-   http://127.0.0.1:8000/docs
-   ```
+  - [Couchbase Server](https://docs.couchbase.com/server/current/search/import-search-index.html)
 
-<details>
-<summary>📚 Additional Details</summary>
+    - Click on Search -> Add Index -> Import
+    - Copy the following Index definition in the Import screen
+    - Click on Create Index to create the index.
 
-### Architecture
-- Modular organization (routes, services, schemas)
-- Version-controlled API endpoints
-- Clean separation of concerns
+  #### Index Definition
 
-### Deployment
-```bash
-docker-compose up --build -d
-```
-Access at: `http://127.0.0.1:8000`
+  Here, we are creating the index `pdf_search` on the documents in the `docs` collection within the `shared` scope in the bucket `pdf-docs`. The Vector field is set to `embeddings` with 1536 dimensions and the text field set to `text`. We are also indexing and storing all the fields under `metadata` in the document as a dynamic mapping to account for varying document structures. The similarity metric is set to `dot_product`. If there is a change in these parameters, please adapt the index accordingly.
 
-</details>
+  ```
+  {
+    "name": "pdf_search",
+    "type": "fulltext-index",
+    "params": {
+        "doc_config": {
+            "docid_prefix_delim": "",
+            "docid_regexp": "",
+            "mode": "scope.collection.type_field",
+            "type_field": "type"
+        },
+        "mapping": {
+            "default_analyzer": "standard",
+            "default_datetime_parser": "dateTimeOptional",
+            "default_field": "_all",
+            "default_mapping": {
+                "dynamic": true,
+                "enabled": false
+            },
+            "default_type": "_default",
+            "docvalues_dynamic": false,
+            "index_dynamic": true,
+            "store_dynamic": false,
+            "type_field": "_type",
+            "types": {
+                "shared.docs": {
+                    "dynamic": true,
+                    "enabled": true,
+                    "properties": {
+                        "embedding": {
+                            "enabled": true,
+                            "dynamic": false,
+                            "fields": [
+                                {
+                                    "dims": 1536,
+                                    "index": true,
+                                    "name": "embedding",
+                                    "similarity": "dot_product",
+                                    "type": "vector",
+                                    "vector_index_optimized_for": "recall"
+                                }
+                            ]
+                        },
+                        "text": {
+                            "enabled": true,
+                            "dynamic": false,
+                            "fields": [
+                                {
+                                    "index": true,
+                                    "name": "text",
+                                    "store": true,
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "store": {
+            "indexType": "scorch",
+            "segmentVersion": 16
+        }
+    },
+    "sourceType": "gocbcore",
+    "sourceName": "pdf-docs",
+    "sourceParams": {},
+    "planParams": {
+        "maxPartitionsPerPIndex": 64,
+        "indexPartitions": 16,
+        "numReplicas": 0
+    }
+  }
+  ```
 
-## 🤝 Contributing
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Open pull request
+- Run the application
 
-<div align="center">
-
----
-<sub>⭐ Star this repository if you found it helpful!</sub>
-
-</div>
+  `streamlit run chat_with_pdf.py`

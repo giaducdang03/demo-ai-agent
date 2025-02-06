@@ -6,7 +6,6 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
@@ -15,20 +14,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     HOST=0.0.0.0
 
-# Create non-root user
-RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser appuser
-
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    apt-get purge -y --auto-remove gcc
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY --chown=appuser:appuser . .
+COPY . .
 
 EXPOSE $PORT
 
-USER appuser
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["streamlit", "run", "chat_with_pdf.py", "--server.address=0.0.0.0", "--server.port=8000"]
