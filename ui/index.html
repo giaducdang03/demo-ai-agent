@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chatbot Interface</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="chat-container">
+        <div id="chat-messages">
+            <!-- Chat messages will appear here -->
+        </div>
+        <div id="waiting-indicator" style="display: none;">
+            Bot is typing
+            <span class="typing-indicator"></span>
+            <span class="typing-indicator"></span>
+            <span class="typing-indicator"></span>
+        </div>
+        <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type your message..." />
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var sendBtn = document.getElementById('send-btn');
+            var chatInput = document.getElementById('chat-input');
+            var chatMessages = document.getElementById('chat-messages');
+
+            sendBtn.addEventListener('click', function() {
+                var message = chatInput.value.trim();
+                console.log('User message:', message); // Debugging: Log user message
+                if (message !== '') {
+                    var messageEl = document.createElement('div');
+                    messageEl.classList.add('message', 'user-message');
+                    messageEl.textContent = message;
+                    chatMessages.appendChild(messageEl);
+                    chatInput.value = '';
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                    // Check if the message contains a number
+                    if (/\d/.test(message)) {
+                        // Send message to backend and get response
+                        fetch('http://localhost:8000/api/v1/categorize', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'accept': 'application/json'
+                            },
+                            body: JSON.stringify({ message: message })
+                        })
+                        .then(response => {
+                            console.log('Categorize API Response:', response); // Debugging: Log API response
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log('Categorize API Data:', data); // Debugging: Log API data
+                            if (data.status_code === 200) {
+                                var category = data.response.category;
+                                var amount = data.response.ammount;
+
+                                // Format amount
+                                var formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+                                var botMessageText = `Bạn vừa thêm ${formattedAmount} vào mục ${category}`;
+                            
+                                var botMessage = document.createElement('div');
+                                botMessage.classList.add('message', 'bot-message');
+                                botMessage.textContent = botMessageText;
+                                chatMessages.appendChild(botMessage);
+                            
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            } else {
+                                // Handle error case
+                                var botMessage = document.createElement('div');
+                                botMessage.classList.add('message', 'bot-message');
+                                botMessage.textContent = "Error processing your request.";
+                                chatMessages.appendChild(botMessage);
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            var botMessage = document.createElement('div');
+                            botMessage.classList.add('message', 'bot-message');
+                            botMessage.textContent = "Failed to communicate with the server.";
+                            chatMessages.appendChild(botMessage);
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        });
+                    } else {
+                        // Call the chat API if no number is present
+                        if (message !== '') {
+                            fetch('http://localhost:8000/api/v1/chat', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'accept': 'application/json'
+                                },
+                                body: JSON.stringify({ message: message })
+                            })
+                            .then(response => {
+                                console.log('Chat API Response:', response); // Debugging: Log API response
+                                return response.json();
+                            })
+                            .then(data => {
+                                console.log('Chat API Data:', data); // Debugging: Log API data
+                                var botResponse = data.response;
+                                var chunks = botResponse.split(/(?:\r\n|\r|\n)/g); // Split by line breaks
+                                var delay = 0;
+
+                                chunks.forEach(chunk => {
+                                    if (/[a-zA-Z]/.test(chunk)) { // Only process if chunk contains alphabetical characters
+                                        setTimeout(() => {
+                                            // Basic Markdown formatting (you can expand this)
+                                            var formattedChunk = chunk.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
+                                                                     .replace(/\*(.*?)\*/g, '<i>$1</i>')       // Italic
+                                                                     .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>'); // Link
+
+                                            var botMessage = document.createElement('div');
+                                            botMessage.classList.add('message', 'bot-message');
+                                            botMessage.innerHTML = formattedChunk; // Use innerHTML to render HTML
+                                            chatMessages.appendChild(botMessage);
+                                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        }, delay);
+                                        delay += 500; // Adjust delay as needed
+                                    }
+                                });
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                var botMessage = document.createElement('div');
+                                botMessage.classList.add('message', 'bot-message');
+                                botMessage.textContent = "Failed to communicate with the chat server.";
+                                chatMessages.appendChild(botMessage);
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            });
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

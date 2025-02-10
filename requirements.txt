@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
+llama_index
+python-dotenv
+llama_index_llms_gemini
