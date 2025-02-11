@@ -17,3 +17,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:80"
+  chat-ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"

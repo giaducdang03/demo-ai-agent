@@ -59,12 +59,12 @@
                             console.log('Categorize API Data:', data); // Debugging: Log API data
                             if (data.status_code === 200) {
                                 var category = data.response.category;
-                                var amount = data.response.ammount;
-
+                                var amount = data.response.amount;
+                                
                                 // Format amount
-                                var formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                                // var formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
-                                var botMessageText = `Bạn vừa thêm ${formattedAmount} vào mục ${category}`;
+                                var botMessageText = `Bạn vừa thêm ${amount} vào mục ${category}`;
                             
                                 var botMessage = document.createElement('div');
                                 botMessage.classList.add('message', 'bot-message');
