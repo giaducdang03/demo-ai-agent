@@ -7,6 +7,7 @@ from langchain_google_genai import (
     HarmBlockThreshold,
     HarmCategory,
 )
+from services.qdrant import QdrantService
 
 load_dotenv()
 class SpendingCategory(BaseModel):
@@ -29,6 +30,7 @@ class ChatBotAgent:
         else:
             print("GOOGLE_API_KEY found in environment variables.")
         self.llm = None
+        self.qdrant_service = QdrantService()
 
     def init_llm(self):
         self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp",
@@ -56,11 +58,28 @@ class ChatBotAgent:
             ("human", query)
         ]
         
-        # If RAG integration is required, implement the additional logic here.
+        if rag:
+            # Retrieve relevant documents
+            relevant_docs = self.qdrant_service.query(query, k=2)
+            context = "\n".join([doc.page_content for doc in relevant_docs])
+            
+            # Add context to the messages
+            messages.insert(1, ("system", f"Context:\n{context}"))
+        
         response = self.llm.invoke(messages)
         return response.content
-    
-  
+
+    def rag_search(self, query: str, k: int = 2) -> list:
+        """
+        Perform RAG search to get relevant documents
+        """
+        return self.qdrant_service.query(query, k=k)
+
+    def add_to_knowledge_base(self, documents: list) -> None:
+        """
+        Add documents to the knowledge base
+        """
+        self.qdrant_service.add_documents(documents)
 
     def input_to_category(self, query: str) -> SpendingCategory:
         SYSTEM_PROMPT = """
