@@ -50,21 +50,36 @@ class ChatBotAgent:
         if not self.llm:
             self.init_llm()
             
-        messages = [
-            (
-                "system",
-                "Bạn là một trợ lý tài chính hữu ích. Vui lòng cung cấp câu trả lời ngắn gọn và dễ hiểu bằng tiếng Việt."
-            ),
-            ("human", query)
-        ]
+        system_prompt = "Bạn là một trợ lý tài chính hữu ích. Vui lòng cung cấp câu trả lời ngắn gọn và dễ hiểu bằng tiếng Việt."
         
         if rag:
             # Retrieve relevant documents
             relevant_docs = self.qdrant_service.query(query, k=2)
             context = "\n".join([doc.page_content for doc in relevant_docs])
+            # Combine system prompt, context and query
+            full_prompt = f"{system_prompt}\nContext:\n{context}\nQuery: {query}"
+        else:
+            full_prompt = f"{system_prompt}\nQuery: {query}"
+        
+        # Use a single human message
+        messages = [("human", full_prompt)]
+        response = self.llm.invoke(messages)
+        return response.content
+
+    def rag_generate_response(self, query: str, context_docs: list) -> str:
+        """Generate a response using RAG with specific context documents"""
+        if not self.llm:
+            self.init_llm()
             
-            # Add context to the messages
-            messages.insert(1, ("system", f"Context:\n{context}"))
+        context = "\n".join([doc.page_content for doc in context_docs])
+        system_prompt = (
+            "Bạn là một trợ lý tài chính hữu ích. Sử dụng context được cung cấp để trả lời câu hỏi. "
+            "Nếu context không đủ thông tin, hãy nói rằng bạn không có đủ thông tin để trả lời."
+        )
+        
+        # Combine everything into a single human message
+        full_prompt = f"{system_prompt}\nContext:\n{context}\nQuery: {query}"
+        messages = [("human", full_prompt)]
         
         response = self.llm.invoke(messages)
         return response.content
@@ -105,3 +120,38 @@ class ChatBotAgent:
                 
         except Exception as e:
             return SpendingCategory(category="other", amount=0.0)
+
+    def rag_query(self, query: str, k: int = 3, threshold: float = 0.7) -> dict:
+        """
+        Enhanced RAG query with relevance scoring and filtering
+        """
+        try:
+            # Get relevant documents with scores
+            relevant_docs = self.qdrant_service.search_with_scores(query, k=k)
+            
+            # Filter documents based on relevance threshold
+            filtered_docs = [doc for doc, score in relevant_docs if score >= threshold]
+            
+            if not filtered_docs:
+                return {
+                    "response": "I don't have enough relevant information to answer your question accurately.",
+                    "sources": [],
+                    "has_relevant_context": False
+                }
+            
+            # Generate response using filtered documents
+            response = self.rag_generate_response(query, filtered_docs)
+            
+            return {
+                "response": response,
+                "sources": [{"content": doc.page_content, "metadata": doc.metadata} for doc in filtered_docs],
+                "has_relevant_context": True
+            }
+            
+        except Exception as e:
+            print(f"Error in RAG query: {str(e)}")
+            return {
+                "response": "An error occurred while processing your query.",
+                "sources": [],
+                "has_relevant_context": False
+            }

@@ -52,23 +52,9 @@ class QdrantService:
         )
     
     def query(self, query: str, k: int = 2) -> List[Document]:
-        """
-        Enhanced query method that combines similarity search with MMR
-        for better result diversity
-        """
-        try:
-            retriever = self.vector_store.as_retriever(
-                search_type="mmr",  # Using MMR for diversity
-                search_kwargs={
-                    "k": k,
-                    "fetch_k": k * 2,  # Fetch more documents initially for better diversity
-                    "lambda_mult": 0.7  # Diversity factor (0.0-1.0)
-                }
-            )
-            return retriever.get_relevant_documents(query)
-        except Exception as e:
-            print(f"Error in query: {str(e)}")
-            return []
+        """Query the vector store"""
+        retriever = self.vector_store.as_retriever(search_type="mmr", search_kwargs={"k": k})
+        return retriever.invoke(query)
 
     def hybrid_search(self, query: str, k: int = 2) -> List[Document]:
         """
@@ -77,3 +63,28 @@ class QdrantService:
         semantic_results = self.similarity_search(query, k=k)
         # You can add keyword search here if needed
         return semantic_results
+
+    def search_with_scores(self, query: str, k: int = 3) -> List[tuple[Document, float]]:
+        """
+        Perform similarity search and return documents with their relevance scores
+        """
+        try:
+            results = self.vector_store.similarity_search_with_score(query, k=k)
+            return results
+        except Exception as e:
+            print(f"Error in search_with_scores: {str(e)}")
+            return []
+
+    def batch_search(self, queries: List[str], k: int = 3) -> List[List[Document]]:
+        """
+        Perform batch similarity search for multiple queries
+        """
+        try:
+            results = []
+            for query in queries:
+                docs = self.similarity_search(query, k=k)
+                results.append(docs)
+            return results
+        except Exception as e:
+            print(f"Error in batch_search: {str(e)}")
+            return [[] for _ in queries]
